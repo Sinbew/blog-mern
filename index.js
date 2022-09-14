@@ -1,13 +1,13 @@
 //imports
 import express from "express";
+import multer from "multer";
 import mongoose from "mongoose";
+
 import { registerValidation, loginValidation, postCreateValidation } from "./validations/validations.js";
-import chekAuth from "./utils/chekAuth.js";
+import { checkAuth, handleValidationErrors } from "./utils/index.js";
+import { UserController, PostController } from "./controllers/index.js";
 
-import * as UserController from "./controllers/UserController.js";
-import * as PostController from "./controllers/PostController.js";
-
-////mongodb
+// MongoDB //
 mongoose
   .connect("mongodb+srv://Sinbew:5659940@cluster0.3p3x1hf.mongodb.net/blog?retryWrites=true&w=majority")
   .then(() => {
@@ -17,21 +17,40 @@ mongoose
     console.log("DB error", err);
   });
 
-//main
+// Main operations //
+
+const storage = multer.diskStorage({
+  destination: (_, __, callback) => {
+    callback(null, "uploads");
+  },
+  filename: (_, file, callback) => {
+    callback(null, file.originalname);
+  },
+});
+
+const upload = multer({ storage });
+
 const app = express();
 app.use(express.json());
+app.use("/uploads", express.static("uploads")); //Обьясняем express, что мы делаем get запрос на получение статичного файла
 
-app.post("/auth/login", loginValidation, UserController.login);
-app.post("/auth/register", registerValidation, UserController.register);
-app.get("/auth/me", chekAuth, UserController.getMe);
+app.post("/auth/login", loginValidation, handleValidationErrors, UserController.login);
+app.post("/auth/register", registerValidation, handleValidationErrors, UserController.register);
+app.get("/auth/me", checkAuth, UserController.getMe);
+
+app.post("/upload", checkAuth, upload.single("image"), (req, res) => {
+  res.json({
+    url: `/uploads/${req.file.originalname}`,
+  });
+});
 
 app.get("/posts", PostController.getAll);
 app.get("/posts/:id", PostController.getOne);
-app.post("/posts", chekAuth, postCreateValidation, PostController.create);
-app.delete("/posts/:id", chekAuth, PostController.remove);
-app.patch("/posts/:id", PostController.update);
+app.post("/posts", checkAuth, postCreateValidation, handleValidationErrors, PostController.create);
+app.delete("/posts/:id", checkAuth, PostController.remove);
+app.patch("/posts/:id", checkAuth, postCreateValidation, handleValidationErrors, PostController.update);
 
-//server status
+// Server status //
 
 app.listen(4444, (err) => {
   if (err) {
